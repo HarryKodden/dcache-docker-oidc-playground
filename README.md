@@ -20,8 +20,8 @@ To set up the dcache Docker container infrastructure, follow these steps:
    Clone this repository to your local machine:
 
    ```
-   git clone https://github.com/harrykodden/dcache.git
-   cd dcache-docker-infra
+   git clone https://github.com/HarryKodden/dcache-docker-oidc-playground.git
+   cd dcache-docker-oidc-playground
    ```
 
 2. **Configure Environment Variables**
