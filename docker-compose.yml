@@ -1,0 +1,152 @@
+services:
+
+  db:
+    image: postgres:15
+    container_name: dcache-db
+    environment:
+      POSTGRES_DB: dcache
+      POSTGRES_USER: ${DCACHE_DB_USERNAME}
+      POSTGRES_PASSWORD: ${DCACHE_DB_PASSWORD}
+    volumes:
+      - database:/var/lib/postgresql/data
+    networks:
+      internal:
+        ipv4_address: 172.28.0.10
+    expose:
+      - 5432
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    container_name: redis-cache    
+    image: redis:7
+    networks:
+      internal:
+        ipv4_address: 172.28.0.11
+    expose:
+      - 6379
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  dcache:
+    hostname: dcache.${DOMAIN}
+    container_name: dcache
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
+      - net.ipv6.conf.default.disable_ipv6=1
+    build:
+      context: build
+      dockerfile: Dockerfile
+      args:
+        - DCACHE_VERSION=${DCACHE_VERSION}
+    volumes:
+      - dcache:/var/lib/dcache
+      - ./etc/dcache:/config:ro
+    environment:      
+      DCACHE_STORAGE_PATH: /var/lib/dcache
+      DCACHE_LOG_LEVEL: DEBUG
+
+      DCACHE_DB_HOST: db
+      DCACHE_DB_PORT: 5432
+      DCACHE_DB_NAME: dcache
+      DCACHE_DB_USERNAME: ${DCACHE_DB_USERNAME}
+      DCACHE_DB_PASSWORD: ${DCACHE_DB_PASSWORD}
+      DCACHE_DB_DRIVER: org.postgresql.Driver
+      
+      DCACHE_VERSION: ${DCACHE_VERSION}
+
+      OIDC_ISSUER: ${OIDC_ISSUER}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      internal:
+        ipv4_address: 172.28.0.12
+    restart: unless-stopped
+
+  whoami:
+    hostname: whoami.${DOMAIN}
+    container_name: whoami
+    image: containous/whoami:latest
+    networks:
+      internal:
+        ipv4_address: 172.28.0.13
+    restart: unless-stopped
+
+  oidc:
+    hostname: oidc.${DOMAIN}
+    container_name: oidc
+    image: quay.io/oauth2-proxy/oauth2-proxy:latest
+    expose:
+      - 4180
+    command:
+      - --http-address=0.0.0.0:4180
+      - --email-domain=*
+      - --provider=oidc
+      - --provider-display-name="My OIDC Provider"
+      - --client-id=${OIDC_CLIENT_ID}
+      - --client-secret=${OIDC_CLIENT_SECRET}
+      - --redirect-url=https://${DOMAIN}/oauth2/callback
+      - --oidc-issuer-url=${OIDC_ISSUER}
+      - --scope=${OIDC_SCOPES}
+      - --cookie-domain=https://${DOMAIN}
+      - --cookie-name=oauth2_proxy
+      - --cookie-expire=2h
+      - --cookie-refresh=1h
+      - --cookie-httponly=true
+      - --cookie-samesite=lax
+      - --cookie-secure=false
+      - --pass-authorization-header=true
+      - --pass-access-token=true
+      - --pass-host-header=true
+      - --set-xauthrequest=true
+      - --cookie-secret=${COOKIE_SECRET}
+      - --skip-provider-button=true
+    networks:
+      internal:
+        ipv4_address: 172.28.0.14
+    restart: unless-stopped
+
+  nginx:
+    hostname: ${DOMAIN}
+    image: nginx:alpine
+    container_name: nginx
+    volumes:
+      - ./etc/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./etc/nginx/static:/usr/share/static:ro
+    depends_on:
+      - oidc
+      - dcache
+      - whoami
+    expose:
+      - 80
+    networks:
+      internal:
+        ipv4_address: 172.28.0.15
+      external:
+    restart: unless-stopped
+
+networks:
+  internal:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+  external:
+    name: ${NETWORK_NAME}
+    external: true
+
+volumes:
+  database:
+  dcache:
