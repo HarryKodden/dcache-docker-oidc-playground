@@ -1,8 +1,14 @@
-# dcache Docker Infrastructure
+# dCache docker OIDC Playground
 
 This project provides a Docker-based infrastructure for running the dcache service. It includes all necessary configurations and scripts to set up and manage the dcache environment efficiently.
 
-Refer: https://agenda.infn.it/event/33041/contributions/182741/attachments/98027/135484/dCachePresentation.pdf
+The setup includes a OAUTH-Proxy container (for OIDC handling), a NGINX Proxy, a dCache Container with Postgres database and redis cache store. Also included is a WhoAmi container to inspect the header values available upon successful OIDC authentication
+
+For questions and recommendations please contact me:
+harry.kodden(-at-)surf.nl
+
+Inspiration found at
+https://agenda.infn.it/event/33041/contributions/182741/attachments/98027/135484/dCachePresentation.pdf
 
 ## Prerequisites
 
