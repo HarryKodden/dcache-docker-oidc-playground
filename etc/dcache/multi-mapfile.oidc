@@ -1,1 +1,1 @@
-op:my-oidc username:user uid:1000 gid:1000,true
+oidc:b0c68753b34d78922a820503d18c046692641e3d@AS username:user uid:1000 gid:1000,true

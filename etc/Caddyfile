@@ -1,0 +1,103 @@
+{
+  # Use env file for `email`
+  email {$LETSENCRYPT_EMAIL}
+}
+
+{$DOMAIN} {
+  # oauth2-proxy routes (incremental / safe)
+  # oauth2-proxy callback and oauth paths
+  handle /oauth2/* {
+    reverse_proxy oauth-proxy:4180 {
+      header_up X-Forwarded-Host {host}
+      header_up X-Forwarded-Proto {scheme}
+    }
+  }
+
+  # keep /auth* proxied to oauth2-proxy for compatibility
+  handle /auth* {
+    reverse_proxy oauth-proxy:4180 {
+      header_up X-Forwarded-Host {host}
+      header_up X-Forwarded-Proto {scheme}
+    }
+  }
+
+  # Vouch/login compatibility: redirect to oauth2-proxy start
+    handle /login {
+      respond "" 302
+      header Location /oauth2/start
+    }
+
+  # fallback root
+  handle /* {
+    reverse_proxy dcache:2880 {
+      header_up X-Forwarded-Host {host}
+      header_up X-Forwarded-Proto {scheme}
+      header_up Authorization "Bearer {>X-Forwarded-Access-Token}"
+    }
+  }
+}
+
+as.{$DOMAIN} {
+  reverse_proxy auth:8080
+}
+
+oidc-lab.{$DOMAIN} {
+  reverse_proxy oidc-lab:8000
+}
+
+whoami.{$DOMAIN} {
+  # oauth2-proxy callback and oauth paths for this subdomain
+  handle /oauth2/* {
+    reverse_proxy oauth-proxy-whoami:4180 {
+      header_up X-Forwarded-Host {host}
+      header_up X-Forwarded-Proto {scheme}
+    }
+  }
+
+  # require oauth cookie (_oauth2_proxy)
+  @has_cookie header_regexp Cookie (_oauth2_proxy)
+  reverse_proxy @has_cookie oauth-proxy-whoami:4180 {
+    header_up X-Forwarded-Host {host}
+    header_up X-Forwarded-Proto {scheme}
+  }
+
+  @no_cookie_whoami {
+    not header_regexp Cookie (_oauth2_proxy)
+    not path /oauth2/*
+    not path /auth*
+  }
+  respond @no_cookie_whoami "" 302
+  header @no_cookie_whoami Location https://{host}/oauth2/start
+}
+
+dcache.{$DOMAIN} {
+  # oauth2-proxy callback and oauth paths for this subdomain
+  handle /oauth2/* {
+    reverse_proxy oauth-proxy-dcache:4180 {
+      header_up X-Forwarded-Host {host}
+      header_up X-Forwarded-Proto {scheme}
+    }
+  }
+
+  # require oauth cookie (_oauth2_proxy)
+  @has_cookie header_regexp Cookie (_oauth2_proxy)
+  reverse_proxy @has_cookie oauth-proxy-dcache:4180 {
+    header_up X-Forwarded-Host {host}
+    header_up X-Forwarded-Proto {scheme}
+  }
+
+  @no_cookie_dcache {
+    not header_regexp Cookie (_oauth2_proxy)
+    not path /oauth2/*
+    not path /auth*
+  }
+  respond @no_cookie_dcache "" 302
+  header @no_cookie_dcache Location https://{host}/oauth2/start
+
+  # final proxy to dCache
+  reverse_proxy dcache:2880 {
+    header_up X-Forwarded-Host {host}
+    header_up X-Forwarded-Proto {scheme}
+  # header_up Authorization "Bearer {>X-Forwarded-Access-Token}"
+  }
+}

@@ -1,48 +1,36 @@
 # Step : build dcache deb package
 FROM maven AS builder
 
-ARG DCACHE_VERSION=master
 ENV DCACHE_HOME=/opt/dcache
 
-RUN apt-get update && apt-get install -y git dpkg-dev debhelper bash-completion quilt
+RUN apt-get update && apt-get install -y dpkg-dev debhelper bash-completion quilt
 RUN mkdir -p ${DCACHE_HOME}
-RUN git clone https://github.com/dCache/dcache.git ${DCACHE_HOME}
+# Use local source in the build context instead of cloning from GitHub
+RUN git clone https://github.com/HarryKodden/dcache.git ${DCACHE_HOME}
+# COPY dcache ${DCACHE_HOME}
+RUN sed -i '/<dotGitDirectory>/a \                        <failOnNoGitDirectory>false</failOnNoGitDirectory>' ${DCACHE_HOME}/pom.xml
 
 WORKDIR ${DCACHE_HOME}
 
-RUN git checkout ${DCACHE_VERSION}
-RUN mvn clean package -DskipTests -am -pl packages/fhs -P deb
-RUN cp ${DCACHE_HOME}/packages/fhs/target/dcache_${DCACHE_VERSION}-1_all.deb /tmp/dcache.deb
+RUN mvn clean package -DskipTests -P deb -Dgit.commit.id.skip=true -DfailOnNoGitDirectory=false -Dgit.commit.id.describe=unknown -pl '!org.dcache:system-test'
+RUN cp ${DCACHE_HOME}/packages/fhs/target/dcache_*-1_all.deb /tmp/dcache.deb
+RUN ar x /tmp/dcache.deb && mkdir -p /tmp/dcache-extracted && tar -xf data.tar.gz -C /tmp/dcache-extracted
+RUN ls -la /tmp/dcache-extracted/usr/share/dcache/lib/
+RUN ln -sf /tmp/dcache-extracted/usr/share/dcache/lib/services-daemon.sh /tmp/dcache-extracted/usr/share/dcache/lib/services.sh
 
 # Step : Install package
-FROM openjdk:slim
+FROM alpine:latest
 
-COPY --from=builder /tmp/dcache.deb /tmp/dcache.deb
+RUN apk add openjdk17
+RUN apk add openssl
+RUN apk add bash gettext-envsubst coreutils su-exec
 
-RUN apt-get update && \
-    apt-get install -y dpkg ssh-client ssl-cert rsyslog procps gettext-base && \
-    dpkg -i /tmp/dcache.deb && \
-    rm -f /tmp/dcache.deb && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# Create dcache user
+RUN adduser -D -s /bin/bash dcache
 
-# This is a bit peculiar. In order to start pools you need x509 certificates.
-# Eventhough you don't use them.
-RUN mkdir -p /etc/grid-security
-RUN mkdir -p /etc/grid-security/certificates
+COPY --from=builder /tmp/dcache-extracted /tmp/dcache-extracted
 
-# Generate phony key and self-signed certificate to make pools start
-RUN openssl genrsa 2048 > /etc/grid-security/hostkey.pem
-RUN openssl req -x509 -days 1000 -new \
-            -subj "/C=NL/ST=Amsterdam/O=SURF/OU=ODS/CN=localhost" \
-            -key /etc/grid-security/hostkey.pem \
-            -out /etc/grid-security/hostcert.pem
-
-RUN cat <<'EOF' > /etc/grid-security/storage-authzdb
-version 2.1
-
-authorize user read-write 1000 1000 /home/user /
-EOF
+RUN tar -cf - -C /tmp/dcache-extracted . | tar -xf - -C /
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

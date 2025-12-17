@@ -1,3 +1,6 @@
 [submodule "build/dcache"]
 	path = build/dcache
 	url = https://github.com/HarryKodden/dcache
+[submodule "oidc-lab"]
+	path = oidc-lab
+	url = https://github.com/HarryKodden/oidc-lab

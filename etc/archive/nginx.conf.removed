@@ -1,0 +1,104 @@
+events {}
+
+http {
+    proxy_buffer_size          128k;
+    proxy_buffers              4 256k;
+    proxy_busy_buffers_size    256k;
+
+    server {
+        listen 80;
+        server_name _;
+
+        location = /oauth2/auth {
+            internal;
+            proxy_pass http://oidc:4180;
+            proxy_set_header Host             $host;
+            proxy_set_header X-Real-IP        $remote_addr;
+            proxy_set_header X-Scheme         $scheme;
+            proxy_set_header X-Forwarded-Uri  $request_uri;
+            proxy_set_header Cookie           $http_cookie;
+            proxy_pass_request_body           off;
+            proxy_set_header Content-Length   "";
+            
+            # nginx auth_request only accepts 200/204, but oauth2-proxy returns 202
+            # We can't change oauth2-proxy's behavior, so we need another approach
+        }
+        
+        # Wrapper to handle 202 response from oauth2-proxy
+        location = /oauth2/check {
+            internal;
+            proxy_pass http://oidc:4180/auth;
+            proxy_set_header Host             $host;
+            proxy_set_header X-Real-IP        $remote_addr;
+            proxy_set_header X-Scheme         $scheme;
+            proxy_set_header X-Forwarded-Uri  $request_uri;
+            proxy_set_header Cookie           $http_cookie;
+            proxy_pass_request_body           off;
+            proxy_set_header Content-Length   "";
+            proxy_pass_header                 X-Forwarded-Access-Token;
+            proxy_pass_header                 X-Auth-Request-User;
+            proxy_pass_header                 X-Auth-Request-Email;
+        }
+
+        location = /favicon.ico {
+            alias /usr/share/static/favicon.ico;
+            access_log off;
+            log_not_found off;
+            expires max;
+        }
+
+        location /oauth2/ {
+            proxy_pass http://oidc:4180;
+            proxy_set_header Host             $host;
+            proxy_set_header X-Real-IP        $remote_addr;
+            proxy_set_header X-Scheme         $scheme;
+        }
+
+        location /whoami {
+            auth_request /oauth2/auth;
+
+            auth_request_set $oidc_user $upstream_http_x_auth_request_user;
+            proxy_set_header REMOTE-USER $oidc_user;
+
+            proxy_pass http://whoami;
+        }
+
+        location /webdav/ {
+            # Rewrite /webdav/ to / for dCache
+            rewrite ^/webdav/(.*) /$1 break;
+            
+            # Proxy to OAuth2 proxy - it will inject Authorization header to upstream
+            proxy_pass http://oidc:4180/;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            
+            # WebDAV specific headers
+            proxy_set_header Destination $http_destination;
+            proxy_set_header Depth $http_depth;
+            
+            proxy_redirect off;
+        }
+
+        location @oauth2_signin {
+            return 302 https://nginx.dcache-docker-oidc-playground.orb.local/oauth2/sign_in?rd=$scheme://$http_host$request_uri;
+        }
+
+        location @error401 {
+            return 302 http://localhost:8080/oauth2/sign_in?rd=$scheme://$http_host$request_uri;
+        }
+
+        location / {
+            auth_request /oauth2/auth;
+            error_page 401 = @error401;
+
+            auth_request_set $token  $upstream_http_x_auth_request_access_token;
+            auth_request_set $oidc_user $upstream_http_x_auth_request_user;
+            proxy_set_header Authorization "Bearer $token";
+            proxy_set_header REMOTE-USER $oidc_user;
+
+            proxy_pass http://dcache:2288;
+        }
+    }
+}

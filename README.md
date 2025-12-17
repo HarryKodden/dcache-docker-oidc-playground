@@ -71,3 +71,23 @@ If you would like to contribute to this project, please fork the repository and 
 ## License
 
 This project is licensed under the MIT License. See the LICENSE file for more details.# dcache-docker-oidc-playground
+
+## OIDC Mapping and authzdb
+
+A few notes to reproduce the OIDC → local user mapping used in this playground:
+
+- **Map OIDC subject to a local user:** edit `etc/dcache/multi-mapfile.oidc` and add a mapping using the `oidc:` predicate. Example:
+
+   oidc:b0c68753b34d78922a820503d18c046692641e3d@AS username:user uid:1000 gid:1000,true
+
+   This maps the OIDC `sub` principal (as produced by the gPlazma OIDC plugin) to the local `user` account.
+
+- **Ensure issuer string matches:** the `iss` value in the incoming JWT must exactly match the provider entry in `etc/dcache/layouts/mylayout.conf` (no trailing slash mismatches).
+
+- **Provide authzdb authorization entries:** create `./etc/grid-security/storage-authzdb` on the host and add authorize entries for the mapped local user/principal so authzdb validation succeeds. Then mount the folder into the container (example `docker-compose.yml` bind:
+
+   ./etc/grid-security:/etc/grid-security:ro
+
+   Before mounting you may see `NoSuchFileException: /etc/grid-security/storage-authzdb` in the dCache logs.
+
+These three items are sufficient to ensure gPlazma will accept the OIDC token, map the identity to a single `username:` principal, and allow authzdb to validate the mapped account.

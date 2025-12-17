@@ -1,0 +1,22 @@
+<configuration>
+
+  <appender name="STDERR" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{yyyy-MM-dd HH:mm:ss} %-5level [%thread] %logger{36} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <!-- Default root -->
+  <root level="INFO">
+    <appender-ref ref="STDERR"/>
+  </root>
+
+  <!-- Increase verbosity for gPlazma / OIDC token handling -->
+  <logger name="org.dcache.gplazma" level="DEBUG"/>
+  <logger name="org.dcache.gplazma.oidc" level="DEBUG"/>
+  <logger name="org.dcache.gplazma.oidc.userinfo" level="DEBUG"/>
+  <!-- Show HTTP authentication handling (Authorization header parsing) -->
+  <logger name="org.dcache.http" level="DEBUG"/>
+  <logger name="org.dcache.auth" level="DEBUG"/>
+
+</configuration>
