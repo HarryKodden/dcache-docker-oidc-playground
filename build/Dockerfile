@@ -6,7 +6,8 @@ ENV DCACHE_HOME=/opt/dcache
 RUN apt-get update && apt-get install -y dpkg-dev debhelper bash-completion quilt
 RUN mkdir -p ${DCACHE_HOME}
 # Use local source in the build context instead of cloning from GitHub
-RUN git clone https://github.com/HarryKodden/dcache.git ${DCACHE_HOME}
+RUN git clone https://github.com/dCache/dcache.git ${DCACHE_HOME}
+# RUN git clone https://github.com/HarryKodden/dcache.git ${DCACHE_HOME}
 # COPY dcache ${DCACHE_HOME}
 RUN sed -i '/<dotGitDirectory>/a \                        <failOnNoGitDirectory>false</failOnNoGitDirectory>' ${DCACHE_HOME}/pom.xml
 
