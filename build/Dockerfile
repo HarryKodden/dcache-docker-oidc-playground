@@ -1,5 +1,5 @@
 # Step : build dcache deb package
-FROM maven AS builder
+FROM maven:3.9.5-eclipse-temurin-17 AS builder
 
 ENV DCACHE_HOME=/opt/dcache
 

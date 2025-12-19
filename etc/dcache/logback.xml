@@ -7,7 +7,7 @@
   </appender>
 
   <!-- Default root -->
-  <root level="INFO">
+  <root level="ERROR">
     <appender-ref ref="STDERR"/>
   </root>
 

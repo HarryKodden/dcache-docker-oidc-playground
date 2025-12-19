@@ -1,7 +1,3 @@
 version 2.1
-# Map JWT subject to local account `user`
-authorize b0c68753b34d78922a820503d18c046692641e3d read-write 1000 1000 /home/user / /
 # Ensure the mapped local account `user` is authorized as well
 authorize user read-write 1000 1000 /home/user / /
-# Also accept `harry` just in case multimap produces that as the username
-authorize harry read-write 1000 1000 /home/user / /

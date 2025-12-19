@@ -81,73 +81,38 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  caddy:
-    image: caddy:2
+  nginx:
+    image: nginx:stable-alpine
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "8080:80"
     volumes:
-      - ./etc/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
+      - ./etc/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./etc:/etc/nginx/conf.d:ro
     env_file:
       - .env
 
-  oauth-proxy-whoami:
+  oauth2-proxy:
     image: quay.io/oauth2-proxy/oauth2-proxy:latest
     restart: unless-stopped
     expose:
       - 4180
     environment:
       - OAUTH2_PROXY_PROVIDER=oidc
-      - OAUTH2_PROXY_OIDC_ISSUER_URL=https://as.${DOMAIN}
-      - OAUTH2_PROXY_CLIENT_ID=demo-dcache
-      - OAUTH2_PROXY_CLIENT_SECRET=J6WYA8qVLnhwmKbaWWKAcv6kRtxO1IRjD0DMzjNxo7TZEmpldqaqoDtnlOGIQ1Bu
-      - OAUTH2_PROXY_REDIRECT_URL=https://whoami.${DOMAIN}/oauth2/callback
-      - OAUTH2_PROXY_COOKIE_SECRET=VQDG0DEfmVwLeXu0FJShUABKJnh5O5k5ZTE7nH43azE=
-      - OAUTH2_PROXY_COOKIE_DOMAIN=.${DOMAIN}
-      - OAUTH2_PROXY_COOKIE_SECURE=true
+      - OAUTH2_PROXY_OIDC_ISSUER_URL=${OIDC_ISSUER}
+      - OAUTH2_PROXY_CLIENT_ID=${OIDC_CLIENT_ID}
+      - OAUTH2_PROXY_CLIENT_SECRET=${OIDC_CLIENT_SECRET}
+      - OAUTH2_PROXY_REDIRECT_URL=${OIDC_CALLBACK_URL}
+      - OAUTH2_PROXY_COOKIE_SECRET=${COOKIE_SECRET}
+      - OAUTH2_PROXY_COOKIE_SECURE=false
       - OAUTH2_PROXY_EMAIL_DOMAINS=*
-      - OAUTH2_PROXY_UPSTREAMS=http://whoami:80/
       - OAUTH2_PROXY_HTTP_ADDRESS=0.0.0.0:4180
       - OAUTH2_PROXY_SET_XAUTHREQUEST=true
-#     - OAUTH2_PROXY_PASS_ACCESS_TOKEN=true
-      - OAUTH2_PROXY_PASS_AUTHORIZATION_HEADER=true
-      - OAUTH2_PROXY_SKIP_AUTH_STRIP_HEADERS=true
-    depends_on:
-      auth:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:4180/oauth2/healthz || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - OAUTH2_PROXY_PASS_ACCESS_TOKEN=true
+      - OAUTH2_PROXY_PASS_USER_HEADERS=true
 
-  oauth-proxy-dcache:
-    image: quay.io/oauth2-proxy/oauth2-proxy:latest
-    restart: unless-stopped
-    expose:
-      - 4180
-    environment:
-      - OAUTH2_PROXY_PROVIDER=oidc
-      - OAUTH2_PROXY_OIDC_ISSUER_URL=https://as.${DOMAIN}
-      - OAUTH2_PROXY_CLIENT_ID=demo-dcache
-      - OAUTH2_PROXY_CLIENT_SECRET=J6WYA8qVLnhwmKbaWWKAcv6kRtxO1IRjD0DMzjNxo7TZEmpldqaqoDtnlOGIQ1Bu
-      - OAUTH2_PROXY_REDIRECT_URL=https://dcache.${DOMAIN}/oauth2/callback
-      - OAUTH2_PROXY_COOKIE_SECRET=VQDG0DEfmVwLeXu0FJShUABKJnh5O5k5ZTE7nH43azE=
-      - OAUTH2_PROXY_COOKIE_DOMAIN=.${DOMAIN}
-      - OAUTH2_PROXY_COOKIE_SECURE=true
-      - OAUTH2_PROXY_EMAIL_DOMAINS=*
-      - OAUTH2_PROXY_UPSTREAMS=http://dcache:2880/
-      - OAUTH2_PROXY_HTTP_ADDRESS=0.0.0.0:4180
-      - OAUTH2_PROXY_SET_XAUTHREQUEST=true
-#     - OAUTH2_PROXY_PASS_ACCESS_TOKEN=true
-      - OAUTH2_PROXY_PASS_AUTHORIZATION_HEADER=true
-      - OAUTH2_PROXY_SKIP_AUTH_STRIP_HEADERS=true
-    depends_on:
-      auth:
-        condition: service_healthy
+      - OAUTH2_PROXY_SESSION_STORE_TYPE=redis
+      - OAUTH2_PROXY_REDIS_CONNECTION_URL=redis://redis:6379
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:4180/oauth2/healthz || exit 1"]
       interval: 10s
@@ -161,49 +126,8 @@ services:
     restart: unless-stopped
     # no healthcheck: traefik/whoami image is minimal and lacks curl/shell
 
-  auth:
-    image: ghcr.io/harrykodden/oauth2-server:main-2c21d4c
-    restart: unless-stopped
-    expose:
-      - 8080
-    environment:
-      - PORT=8080
-      - DATABASE_TYPE=memory
-      - LOG_LEVEL=debug
-
-      - API_KEY=${API_KEY}
-      - ENABLE_REGISTRATION_API=true
-      - ENABLE_TRUST_ANCHOR_API=true
-      - ALLOW_SYNTHETIC_ID_TOKEN=true
-
-      - PUBLIC_BASE_URL=https://as.${DOMAIN}
-      - JWT_SIGNING_KEY=9f2b7c6a5d4e3f1a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6
-      - ENCRYPTION_KEY=0123456789ABCDEF0123456789ABCDEF
-
-      - UPSTREAM_PROVIDER_URL=${OIDC_ISSUER}
-      - UPSTREAM_CLIENT_ID=${OIDC_CLIENT_ID}
-      - UPSTREAM_CLIENT_SECRET=${OIDC_CLIENT_SECRET}
-      - UPSTREAM_CALLBACK_URL=https://as.${DOMAIN}/callback
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  oidc-lab:
-    build:
-      context: ./oidc-lab
-    image: oidc-lab:local
-    restart: unless-stopped
-    expose:
-      - 8000
-    environment:
-      - PORT=8000
-      - HOST=oidc-lab.${DOMAIN}
-
 volumes:
   database:
   dcache:
   dcache-config:
-  caddy_data:
-  caddy_config:
+  # kept for compatibility: remove if not needed
